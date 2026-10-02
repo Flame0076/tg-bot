@@ -6,10 +6,11 @@ import os
 from flask import Flask
 import threading
 
-# --- YAHAN APNI DETAILS FILL KAREIN ---
-TOKEN = "8901757330:AAEuCvPa3HkzOVc1AmhAOSrLs1qxVIOZ2RU"  # Apna bot token dalein
-OWNER_ID = 6022261644           # Apna numeric User ID dalein
-# --------------------------------------
+# --- ENVIRONMENT VARIABLES ---
+# Ab token aur ID code mein nahi, balki server ke variables se aayenge
+TOKEN = os.environ.get("BOT_TOKEN") 
+OWNER_ID = int(os.environ.get("OWNER_ID", "0")) 
+# -----------------------------
 
 bot = telebot.TeleBot(TOKEN)
 allowed_users = {OWNER_ID}
