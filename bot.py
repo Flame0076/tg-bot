@@ -7,8 +7,8 @@ from flask import Flask
 import threading
 
 # --- YAHAN APNI DETAILS FILL KAREIN ---
-TOKEN = "8901757330:AAEuCvPa3HkzOVc1AmhAOSrLs1qxVIOZ2RU"
-OWNER_ID = 6022261644  # Apna User ID yahan daalein
+TOKEN = "8901757330:AAEuCvPa3HkzOVc1AmhAOSrLs1qxVIOZ2RU"  # Apna bot token dalein
+OWNER_ID = 6022261644           # Apna numeric User ID dalein
 # --------------------------------------
 
 bot = telebot.TeleBot(TOKEN)
@@ -58,7 +58,9 @@ def add_user(message):
         except:
             bot.reply_to(message, "Send command like this: /add_user 123456789")
 
-# --- TXT TO CSV FLOW ---
+# ==========================================
+#             TXT TO CSV FLOW
+# ==========================================
 @bot.message_handler(commands=['Txt_To_CSV'])
 def txt_to_csv_start(message):
     if not is_auth(message):
@@ -120,21 +122,37 @@ def tags_callback(call):
         msg = bot.send_message(chat_id, "Send Me Your Tag Name Example Flame")
         bot.register_next_step_handler(msg, process_tag_name)
     else:
-        generate_csv(chat_id, tag="")
+        user_data[chat_id]['tag'] = ""
+        msg = bot.send_message(chat_id, "Send Me Name For Your Saved File (without .csv):")
+        bot.register_next_step_handler(msg, ask_csv_filename)
 
 def process_tag_name(message):
     if message.text == '/reset': return reset_command(message)
-    generate_csv(message.chat.id, tag=message.text.strip())
+    user_data[message.chat.id]['tag'] = message.text.strip()
+    
+    msg = bot.send_message(message.chat.id, "Send Me Name For Your Saved File (without .csv):")
+    bot.register_next_step_handler(msg, ask_csv_filename)
 
-def generate_csv(chat_id, tag=""):
+def ask_csv_filename(message):
+    if message.text == '/reset': return reset_command(message)
+    file_name = message.text.strip()
+    # Remove extension if user accidentally added it
+    if file_name.lower().endswith('.csv'):
+        file_name = file_name[:-4]
+        
+    generate_csv(message.chat.id, file_name=file_name)
+
+def generate_csv(chat_id, file_name):
     data = user_data.get(chat_id)
     if not data: return
         
     numbers = data['numbers']
     prefix = data['prefix']
     start_idx = data['index']
+    tag = data.get('tag', "")
     
-    filename = f"{chat_id}_contacts.csv"
+    # Save with user defined file name
+    filename = f"{file_name}.csv"
     with open(filename, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow(['Name', 'Phone Number', 'Tags'])
@@ -148,7 +166,10 @@ def generate_csv(chat_id, tag=""):
     os.remove(filename)
     del user_data[chat_id]
 
-# --- CSV TO TXT FLOW ---
+
+# ==========================================
+#             CSV TO TXT FLOW
+# ==========================================
 @bot.message_handler(commands=['CSV_To_TXT'])
 def csv_to_txt_start(message):
     if not is_auth(message):
@@ -184,17 +205,41 @@ def process_csv_file(message):
             bot.send_message(message.chat.id, "No numbers found in the CSV.")
             return
             
-        filename = f"{message.chat.id}_numbers.txt"
-        with open(filename, 'w', encoding='utf-8') as f:
-            f.write('\n'.join(numbers))
-            
-        with open(filename, 'rb') as f:
-            bot.send_document(message.chat.id, f, caption="Your TXT File Is Ready")
-            
-        os.remove(filename)
+        user_data[message.chat.id] = {'extracted_numbers': numbers}
+        
+        # Ask for the output file name
+        msg = bot.send_message(message.chat.id, "Send Me Name For Your Saved File (without .txt):")
+        bot.register_next_step_handler(msg, ask_txt_filename)
         
     except Exception as e:
         bot.send_message(message.chat.id, "Error processing CSV.")
+
+def ask_txt_filename(message):
+    if message.text == '/reset': return reset_command(message)
+    
+    file_name = message.text.strip()
+    if file_name.lower().endswith('.txt'):
+        file_name = file_name[:-4]
+        
+    generate_txt(message.chat.id, file_name)
+
+def generate_txt(chat_id, file_name):
+    data = user_data.get(chat_id)
+    if not data or 'extracted_numbers' not in data: 
+        return
+    
+    numbers = data['extracted_numbers']
+    filename = f"{file_name}.txt"
+    
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(numbers))
+        
+    with open(filename, 'rb') as f:
+        bot.send_document(chat_id, f, caption="Your TXT File Is Ready")
+        
+    os.remove(filename)
+    del user_data[chat_id]
+
 
 def run_bot():
     bot.infinity_polling()
